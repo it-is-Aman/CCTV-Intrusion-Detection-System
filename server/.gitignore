@@ -1,0 +1,26 @@
+.venv
+storage
+*.pt
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class   
+
+# Environment files (sensitive data)
+.env
+.env.local
+.env.example
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.iml
