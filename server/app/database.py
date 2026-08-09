@@ -86,6 +86,7 @@ async def _migrate(db: aiosqlite.Connection) -> None:
             name        TEXT NOT NULL,
             zone_type   TEXT NOT NULL CHECK(zone_type IN ('polygon', 'line')),
             points      TEXT NOT NULL,   -- JSON array of [x, y] pairs
+            trigger     TEXT NOT NULL DEFAULT 'entry',
             created_at  TEXT NOT NULL
         );
 
@@ -104,6 +105,13 @@ async def _migrate(db: aiosqlite.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_events_zone_id   ON events(zone_id);
         """
     )
+    # Safe migration for existing DBs that don't yet have the trigger column.
+    try:
+        await db.execute("ALTER TABLE zones ADD COLUMN trigger TEXT NOT NULL DEFAULT 'entry'")
+        await db.commit()
+        logger.info("Migrated: added trigger column to zones")
+    except Exception:
+        pass  # Column already exists — expected on all runs after the first.
     await db.commit()
 
 
@@ -126,8 +134,8 @@ async def get_zone(zone_id: str) -> Zone | None:
 async def insert_zone(zone: Zone) -> None:
     db = get_db()
     await db.execute(
-        "INSERT INTO zones (id, name, zone_type, points, created_at) VALUES (?, ?, ?, ?, ?)",
-        (zone.id, zone.name, zone.zone_type.value, json.dumps(zone.points), zone.created_at.isoformat()),
+        "INSERT INTO zones (id, name, zone_type, points, trigger, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (zone.id, zone.name, zone.zone_type.value, json.dumps(zone.points), zone.trigger, zone.created_at.isoformat()),
     )
     await db.commit()
 
@@ -203,6 +211,7 @@ def _row_to_zone(row: aiosqlite.Row) -> Zone:
         name=row["name"],
         zone_type=ZoneType(row["zone_type"]),
         points=json.loads(row["points"]),
+        trigger=row["trigger"],
         created_at=datetime.fromisoformat(row["created_at"]),
     )
 

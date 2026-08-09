@@ -19,6 +19,21 @@ class ZoneType(str, Enum):
     line = "line"
 
 
+class PolygonTrigger(str, Enum):
+    """When to fire an alert for polygon zones."""
+
+    entry = "entry"   # person enters the polygon (default)
+    exit = "exit"     # person leaves the polygon
+
+
+class LineTrigger(str, Enum):
+    """Which crossing direction fires an alert for line/tripwire zones."""
+
+    both = "both"       # either direction (default)
+    a_to_b = "a_to_b"  # crosses from the A-side to the B-side
+    b_to_a = "b_to_a"  # crosses from the B-side to the A-side
+
+
 @dataclass
 class Zone:
     """A named detection zone drawn by the user.
@@ -31,6 +46,7 @@ class Zone:
     name: str
     zone_type: ZoneType
     points: list[list[float]]  # [[x, y], ...]
+    trigger: str = "entry"     # PolygonTrigger or LineTrigger value
     created_at: datetime = field(default_factory=datetime.utcnow)
 
     def to_dict(self) -> dict[str, Any]:
@@ -39,6 +55,7 @@ class Zone:
             "name": self.name,
             "zone_type": self.zone_type.value,
             "points": self.points,
+            "trigger": self.trigger,
             "created_at": self.created_at.isoformat(),
         }
 

@@ -73,11 +73,12 @@ export default function App() {
     // Double-click closes polygon (points already adequate)
   }, [])
 
-  const handleSaveZone = useCallback(async (name) => {
+  const handleSaveZone = useCallback(async (name: string, trigger: string) => {
     await createZone({
       name,
-      zone_type: drawMode,
-      points: drawingPoints,
+      zone_type: drawMode!,
+      points: drawingPoints as [number, number][],
+      trigger,
     })
     setDrawMode(null)
     setDrawingPoints([])

@@ -135,17 +135,33 @@ class ZoneEngine:
             return None
 
         is_inside = shape.contains(Point(cx, cy))  # type: ignore[union-attr]
+        trigger = zone.trigger  # 'entry' or 'exit'
 
-        if is_inside:
-            self._inside_count[key] += 1
-        else:
-            self._inside_count[key] = 0
-            self._fired[key] = False  # Reset so next entry fires again.
-            return None
+        if trigger == "entry":
+            # Fire when person enters (outside → inside, debounced).
+            if is_inside:
+                self._inside_count[key] += 1
+            else:
+                self._inside_count[key] = 0
+                self._fired[key] = False  # Reset so next entry fires again.
+                return None
 
-        if self._inside_count[key] >= settings.debounce_frames and not self._fired[key]:
-            self._fired[key] = True
-            return self._make_event(zone, person)
+            if self._inside_count[key] >= settings.debounce_frames and not self._fired[key]:
+                self._fired[key] = True
+                return self._make_event(zone, person)
+
+        else:  # trigger == 'exit'
+            # Fire when person exits (inside → outside, debounced on inside).
+            if is_inside:
+                self._inside_count[key] += 1
+                self._fired[key] = False  # Person is inside, reset exit flag.
+            else:
+                # Person is now outside.
+                if self._inside_count[key] >= settings.debounce_frames and not self._fired[key]:
+                    self._fired[key] = True
+                    self._inside_count[key] = 0
+                    return self._make_event(zone, person)
+                self._inside_count[key] = 0
 
         return None
 
@@ -170,19 +186,42 @@ class ZoneEngine:
         dx, dy = x2 - x1, y2 - y1
 
         def signed_dist(px: float, py: float) -> float:
-            """Signed distance from point (px, py) to the line (x1,y1)→(x2,y2)."""
+            """Signed distance from point (px, py) to the line A→B.
+
+            Positive = person is on the LEFT of the A→B direction.
+            Negative = person is on the RIGHT of the A→B direction.
+            """
             return dx * (py - y1) - dy * (px - x1)
 
         prev_sign = signed_dist(*prev_centroid)
         curr_sign = signed_dist(cx, cy)
 
-        if prev_sign * curr_sign < 0:  # Sign changed → crossed the line.
-            if not self._fired[key]:
-                self._fired[key] = True
-                return self._make_event(zone, person)
-        else:
-            # Allow the event to re-fire after the person crosses back.
-            self._fired[key] = False
+        crossed = prev_sign * curr_sign < 0  # Sign changed → crossed the line.
+        if not crossed:
+            self._fired[key] = False  # Reset so re-crossing fires again.
+            return None
+
+        trigger = zone.trigger  # 'both', 'a_to_b', or 'b_to_a'
+
+        # a_to_b: person was on LEFT (positive) side → moved to RIGHT (negative).
+        # b_to_a: person was on RIGHT (negative) side → moved to LEFT (positive).
+        crossed_a_to_b = prev_sign > 0 and curr_sign < 0
+        crossed_b_to_a = prev_sign < 0 and curr_sign > 0
+
+        direction_matches = (
+            trigger == "both"
+            or (trigger == "a_to_b" and crossed_a_to_b)
+            or (trigger == "b_to_a" and crossed_b_to_a)
+        )
+
+        if direction_matches and not self._fired[key]:
+            self._fired[key] = True
+            return self._make_event(zone, person)
+
+        # If direction didn't match, still mark as crossed so we don't
+        # re-fire on the same crossing from the other side later.
+        if not direction_matches:
+            self._fired[key] = True  # suppress until they cross back
 
         return None
 

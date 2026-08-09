@@ -6,6 +6,8 @@
  */
 
 export type ZoneType = 'polygon' | 'line'
+export type PolygonTrigger = 'entry' | 'exit'
+export type LineTrigger = 'both' | 'a_to_b' | 'b_to_a'
 
 export interface Zone {
   id: string
@@ -13,6 +15,7 @@ export interface Zone {
   zone_type: ZoneType
   /** Normalised [0,1] coordinate pairs [[x,y], ...] */
   points: [number, number][]
+  trigger: string
   created_at: string
 }
 
@@ -20,6 +23,7 @@ export interface ZoneCreate {
   name: string
   zone_type: ZoneType
   points: [number, number][]
+  trigger: string
 }
 
 export interface Event {

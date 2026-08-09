@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 import app.database as db
-from app.models import Zone, ZoneType
+from app.models import LineTrigger, PolygonTrigger, Zone, ZoneType
 
 router = APIRouter(prefix="/zones", tags=["zones"])
 
@@ -31,11 +31,13 @@ class ZoneCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=80)
     zone_type: ZoneType
     points: list[list[float]] = Field(..., min_length=2)
+    trigger: str = "entry"  # PolygonTrigger or LineTrigger value
 
     model_config = {"json_schema_extra": {"example": {
         "name": "Front door",
         "zone_type": "polygon",
         "points": [[0.1, 0.2], [0.4, 0.2], [0.4, 0.6], [0.1, 0.6]],
+        "trigger": "entry",
     }}}
 
 
@@ -44,6 +46,7 @@ class ZoneResponse(BaseModel):
     name: str
     zone_type: ZoneType
     points: list[list[float]]
+    trigger: str
     created_at: str
 
     @classmethod
@@ -53,6 +56,7 @@ class ZoneResponse(BaseModel):
             name=zone.name,
             zone_type=zone.zone_type,
             points=zone.points,
+            trigger=zone.trigger,
             created_at=zone.created_at.isoformat(),
         )
 
@@ -74,11 +78,20 @@ async def create_zone_endpoint(payload: ZoneCreate) -> ZoneResponse:
     if payload.zone_type == ZoneType.line and len(payload.points) != 2:
         raise HTTPException(status_code=422, detail="Line zones require exactly 2 points.")
 
+    # Validate trigger value matches zone type.
+    valid_polygon = {t.value for t in PolygonTrigger}
+    valid_line = {t.value for t in LineTrigger}
+    if payload.zone_type == ZoneType.polygon and payload.trigger not in valid_polygon:
+        raise HTTPException(status_code=422, detail=f"Polygon trigger must be one of: {valid_polygon}")
+    if payload.zone_type == ZoneType.line and payload.trigger not in valid_line:
+        raise HTTPException(status_code=422, detail=f"Line trigger must be one of: {valid_line}")
+
     zone = Zone(
         id=str(uuid.uuid4()),
         name=payload.name,
         zone_type=payload.zone_type,
         points=payload.points,
+        trigger=payload.trigger,
         created_at=datetime.utcnow(),
     )
     await db.insert_zone(zone)
